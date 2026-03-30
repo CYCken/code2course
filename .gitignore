@@ -1,0 +1,32 @@
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Python environments
+venv/
+env/
+.env
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.suo
+
+# Code2Course specific
+# 非常重要！這是使用者的最終輸出與佔存檔，絕對不能推進 Git 導致容量爆掉
+outputs/
+
+# 設定檔與樣板檔
+# 重要：避免將包含個人 GEMINI_API_KEY 的 JSON 設定檔上傳到 GitHub！
+# 建議您可以在專案留一份 code2course_config.example.json 給別人參考
+code2course_config.json
+code2course_prompt.txt
