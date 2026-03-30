@@ -97,6 +97,25 @@ sh run.sh
 主程式每次執行時都會即時讀取這個 `.txt` 檔，因此你所有的打磨與測試都在外面進行，無需去修改 `main.py`。
 請注意：自訂樣板時，必須保留文件最下方的 `{merged_text}` 標籤，程式才能把專案原始碼成功注入！
 
+### 💡 魔改秘技：控制投影片數量
+如果您的專案極度龐大，導致 AI 過度鑽牛角尖跑出四五十頁超長簡報，您可以直接把「總頁數限制指令」貼進 `code2course_prompt.txt` 裡面。
+
+**建議放置位置與貼上範例：**
+請將這段話加在「這份專案內含多個可能看似不相關的技術區塊...」的規則段落中，緊跟著您的邏輯主軸底下：
+
+```text
+進入每個觀念的教學細節時，請在心中默默遵循這四個邏輯主軸來分析：
+- (Scope) 這是什麼核心功能？
+- (Why do) 為何需要它？解決了什麼痛點或是工程難題？
+- (How do) 運作邏輯是什麼？(善用生動的比喻或 Emoji 帶出畫面感)
+- (What do) 程式碼具體達成了什麼？
+
+👉 [進階控制]：請將相似的模組概念進行分類與合併，不要過度刁鑽於每一個微小檔案。請將最終輸出的投影片總數嚴格控制在 15 到 20 張以內，只講述最精華、最核心的系統脈絡。
+
+輸出的格式必須是純 JSON 陣列 (Array) 結構...
+```
+只要加上這句話，Gemini 就會乖乖幫您把幾十個檔案濃縮成最精華的 15 頁大綱了！
+
 ---
 
 ## 🕹️ 斷點接關與多模式執行 (Multi-mode CLI)
@@ -145,7 +164,7 @@ jobs:
       # - name: Download Code2Course (External Library)
       #   uses: actions/checkout@v4
       #   with:
-      #     repository: your_username/code2course
+      #     repository: CYCken/code2course
       #     path: code2course
 
       - name: Setup Python
