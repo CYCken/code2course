@@ -8,8 +8,27 @@
 
 ### 📦 安裝與配置方式
 
-**步驟 1**：請將此 `code2course/` 目錄放置於您的專案根目錄之下。
-**步驟 2**：請將 `run.sh` 與 `code2course_config.example.json` 複製一份到外層的專案根目錄，並將設定檔重新命名為 `code2course_config.json`。
+### 📦 安裝與配置方式
+
+想要將 **Code2Course** 引入您的任何專案，有兩種最主流的方式：
+
+**選項 A：使用 Git Submodule (強烈推薦，方便未來更新這套工具)**
+
+```bash
+git submodule add https://github.com/CYCken/code2course.git code2course
+```
+
+**選項 B：直接 Clone 為一般資料夾**
+
+```bash
+git clone https://github.com/CYCken/code2course.git code2course
+```
+
+**後續設定步驟**：
+
+1. 將剛才拉進來的 `code2course/` 裡面的 `run.sh` 複製一份到**外層的專案根目錄**。
+2. 將 `code2course/code2course_config.example.json` 複製一份到外層，並重新命名為 `code2course_config.json`。
+3. 打開 `code2course_config.json`，填入您的 `GEMINI_API_KEY`。
 
 ```text
 your_project/ (根目錄)
@@ -35,6 +54,7 @@ sh run.sh
 ```
 
 這隻腳本會一次幫你自動完成：
+
 1. 建立並啟用 Python 虛擬環境 (`venv`)
 2. 檢查並安裝必要的相依套件 (`requirements.txt`)
 3. 執行主程式 `main.py`
@@ -58,7 +78,7 @@ sh run.sh
 - **`GEMINI_API_KEY`**: 必填！請填入您的 Google API Key (優先權高於 `code2course/.env` 檔案)。
 - **`supported_exts`**: 指定要讀取哪些副檔名的程式碼來分析。
 - **`exclude_dirs`**: 這些字眼的資料夾將會被完全略過。避免像 `drivers` 或 `node_modules` 這種龐大的底層函式庫耗盡你的 API Token 額度。
-- **`target_folder`**: 
+- **`target_folder`**:
   - 若你想**跳過上下鍵的終端互動選單**，請在此填寫目標資料夾名稱（例如 `"Discovery-F4"`）。
   - 若留空 `""`，程式將自動啟動漂亮互動選單，讓你在終端機使用鍵盤上下挑選專案。
 
@@ -69,6 +89,7 @@ sh run.sh
 執行第一次主程式 (或 `sh run.sh`) 後，系統若偵測不到樣板檔案，會在根目錄自動幫你產生一份**「預設的 `code2course_prompt.txt`」**。
 
 這個純文字檔案包含了傳給 Gemini API 的所有 Prompt 指令方針。你可以：
+
 - 自由修改老師的授課口吻 (例如要求「用幼稚園聽得懂的話講解」或「全英文授課」)。
 - 調整四大微課程框架 (原為 Scope, Why, How, What)。
 - 要求它專注於特定的硬體元件解析。
@@ -101,7 +122,7 @@ sh run.sh
 name: Generate Education Materials
 on:
   push:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build_materials:
@@ -109,7 +130,7 @@ jobs:
     steps:
       - name: Checkout Your Code
         uses: actions/checkout@v4
-        
+
       # 💡 神奇魔法：這裡會動態把您或別人的 Generator 引擎拉下來用！
       - name: Download Code2Course (External Library)
         uses: actions/checkout@v4
@@ -121,7 +142,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-          
+
       - name: Install System Dependencies
         # 安裝中文字型以防影片渲染出亂碼
         run: |
@@ -133,8 +154,8 @@ jobs:
 
       - name: Run Code2Course Generator
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # 請記得在 GitHub Secrets 設定
-          AUTO_EDU_MODE: "0"  # 告訴主程式這是在 CI 自動化環境，跳過互動選單強制執行模式 0
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # 請記得在 GitHub Secrets 設定
+          AUTO_EDU_MODE: "0" # 告訴主程式這是在 CI 自動化環境，跳過互動選單強制執行模式 0
         run: |
           cd code2course
           python main.py
