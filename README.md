@@ -116,55 +116,81 @@ sh run.sh
 
 您可以輕鬆地把這套教材產生器掛載到 GitHub，當任何開發者 Push 程式碼時，就自動在雲端產生一部最新教學影片！
 
-只要在您的主專案資料夾建立 `.github/workflows/auto_edu_gen.yml`，貼上以下腳本：
+只要在您的主專案資料夾建立 `.github/workflows/code2course_gen.yml`，貼上以下腳本：
 
 ```yaml
-name: Generate Education Materials
+name: Code2Course Generator
+
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      target_folder:
+        description: "要掃描的專案資料夾 (例如: Discovery-F4)"
+        required: false
+        default: "Discovery-F4"
 
 jobs:
   build_materials:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Your Code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 💡 神奇魔法：這裡會動態把您或別人的 Generator 引擎拉下來用！
-      - name: Download Code2Course (External Library)
-        uses: actions/checkout@v4
-        with:
-          repository: your_github_account/code2course # 替換成您的 Repo
-          path: code2course
+      # 💡 提示：如果您把 code2course 抽離成獨立的 GitHub Repo
+      # 您只需要解開下面這段的註解，Action 執行時就會自動把它抓下來用！
+      # - name: Download Code2Course (External Library)
+      #   uses: actions/checkout@v4
+      #   with:
+      #     repository: your_username/code2course
+      #     path: code2course
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
+          cache: "pip"
 
-      - name: Install System Dependencies
-        # 安裝中文字型以防影片渲染出亂碼
+      - name: Install System Dependencies (FFmpeg & CJK Fonts)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-noto-cjk
+          # 安裝影像處理套件與中文字型，防止影片渲染出豆腐塊亂碼
+          sudo apt-get install -y ffmpeg fonts-noto-cjk fonts-wqy-microhei
 
       - name: Install Python Dependencies
-        run: pip install -r code2course/requirements.txt
+        run: |
+          cd code2course
+          pip install -r requirements.txt
+
+      - name: Configure Headless Mode
+        # 確保不會觸發終端機互動 UI 以免卡死
+        run: |
+          TARGET="${{ github.event.inputs.target_folder }}"
+          # 如果是 push 進 main 分支，預設抓 Discovery-F4
+          if [ -z "$TARGET" ]; then
+              TARGET="Discovery-F4"
+          fi
+
+          # 將 target_folder 強制寫入 JSON config 中
+          python3 -c "import json; f=open('code2course_config.json'); c=json.load(f); f.close(); c['target_folder']='$TARGET'; f=open('code2course_config.json','w'); json.dump(c,f); f.close()"
 
       - name: Run Code2Course Generator
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # 請記得在 GitHub Secrets 設定
-          AUTO_EDU_MODE: "0" # 告訴主程式這是在 CI 自動化環境，跳過互動選單強制執行模式 0
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AUTO_MODE: "0" # 告訴主程式這是在 CI 執行 Mode 0 (完整流程)
         run: |
           cd code2course
           python main.py
 
-      - name: Upload Output Video
+      - name: Upload Generated Output (Artifacts)
         uses: actions/upload-artifact@v4
         with:
-          name: Educational-Materials-${{ github.sha }}
+          name: Code2Course-Materials-${{ github.sha }}
           path: outputs/
+          retention-days: 14
 ```
 
 > ⚠️ 請記得去 GitHub 專案的 `Settings` -> `Secrets and variables` -> `Actions` 新增一個名為 `GEMINI_API_KEY` 的 Secret，才不會暴露您的密碼！
