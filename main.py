@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # 載入環境變數 (例如 Gemini API Key)
 load_dotenv()
 
-class EduContentGenerator:
+class Code2Course:
     def __init__(self, target_dir=None, config=None):
         self.target_dir = target_dir
         self.config = config or {}
@@ -501,7 +501,7 @@ def main():
     # ======= 宣告工具實體 =======
     try:
         # 對於階段 2, 3 若 target_directory 為 None 亦無妨，掃描檔不會被調用到
-        generator = EduContentGenerator(target_dir=target_directory, config=config)
+        generator = Code2Course(target_dir=target_directory, config=config)
     except ValueError as e:
         print(f"👉 啟動提醒: {e}")
         return
