@@ -257,6 +257,7 @@ jobs:
       - name: Run Code2Course Generator
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           AUTO_MODE: "0" # 告訴主程式這是在 CI 執行 Mode 0 (完整流程)
         run: |
           cd code2course
