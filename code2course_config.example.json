@@ -1,6 +1,24 @@
 {
   "GEMINI_API_KEY": "YOUR_GEMINI_API_KEY_HERE",
-  "supported_exts": [".md", ".c", ".py", ".cpp", ".h"],
-  "exclude_dirs": ["drivers", "rte", "cmsis", "build", "node_modules", "lib"],
-  "target_folder": ""
+  "PEXELS_API_KEY": "YOUR_PEXELS_API_KEY_HERE",
+  "gemini_model": "gemini-2.5-flash",
+  "max_chars": 300000,
+  "supported_exts": [
+    ".md",
+    ".c",
+    ".py",
+    ".cpp",
+    ".h"
+  ],
+  "exclude_dirs": [
+    "drivers",
+    "rte",
+    "cmsis",
+    "build",
+    "node_modules",
+    "lib"
+  ],
+  "target_folder": "",
+  "enable_invideo": false,
+  "enable_remotion": false
 }

@@ -1,0 +1,21 @@
+{
+    "title_font_size_large": 44,
+    "title_font_size_medium": 36,
+    "title_font_size_small": 28,
+    "body_font_size": 24,
+    "mask_rgb": [40, 40, 40],
+    "mask_alpha": 0.5,
+    "text_color_on_image_rgb": [255, 255, 255],
+    "text_color_on_plain_rgb": [0, 0, 0],
+    "bg_color_plain_rgb": [255, 255, 255],
+    "title_top_margin_inches": 0.5,
+    "body_top_margin_min_inches": 2.5,
+
+    "video_overlay_rgba": [0, 0, 0, 160],
+    "video_banner_rgba": [41, 128, 185, 180],
+    "video_card_mask_rgba": [20, 20, 20, 127],
+    "video_bg_color_rgb": [25, 28, 36],
+    "video_title_font_size": 80,
+    "video_body_font_size": 50,
+    "video_text_color_rgb": [255, 255, 255]
+}
