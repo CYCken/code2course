@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 
 
@@ -34,36 +35,90 @@ def _summarize_project_structure(target_dir, config):
     return "\n".join(summary_lines[:40]) or "(無可顯示的檔案結構)"
 
 
+def _is_excluded_path(path_str, exclude_dirs):
+    path_str_lower = path_str.lower()
+    return any(f"/{ex_dir}/" in path_str_lower or f"\\{ex_dir}\\" in path_str_lower for ex_dir in exclude_dirs)
+
+
+def _iter_supported_files(target_dir, config):
+    if not target_dir:
+        return []
+
+    target_path = Path(target_dir)
+    if not target_path.exists() or not target_path.is_dir():
+        return []
+
+    supported_exts = config.get("supported_exts", ['.md', '.c', '.py', '.cpp', '.h'])
+    exclude_dirs = set(config.get("exclude_dirs", ['drivers', 'rte', 'cmsis', 'build', 'node_modules', 'lib']))
+    exclude_dirs.update({'code2course', 'code2course-'})
+
+    results = []
+    for ext in supported_exts:
+        for filepath in target_path.rglob(f"*{ext}"):
+            if not filepath.is_file():
+                continue
+            file_str = str(filepath)
+            if _is_excluded_path(file_str, exclude_dirs):
+                continue
+            try:
+                rel_parts = filepath.relative_to(target_path).parts
+            except Exception:
+                rel_parts = ()
+            if any(part.lower() in {'code2course', 'code2course-'} for part in rel_parts):
+                continue
+            results.append(filepath)
+    return sorted(results)
+
+
+def estimate_project_size(target_dir, config):
+    """預檢專案內容規模，提供大型專案的切分依據。"""
+    files = _iter_supported_files(target_dir, config)
+    total_bytes = 0
+    for filepath in files:
+        try:
+            total_bytes += os.path.getsize(filepath)
+        except Exception:
+            continue
+    return {
+        'file_count': len(files),
+        'estimated_chars': total_bytes,
+        'too_large': total_bytes > config.get("max_chars", 300000),
+    }
+
+
 def read_source_files(target_dir, config):
     """讀取目標資料夾內的特定副檔名檔案"""
     if not target_dir:
         return {}
-        
+
     supported_exts = config.get("supported_exts", ['.md', '.c', '.py', '.cpp', '.h'])
     contents = {}
     target_path = Path(target_dir)
-    
-    # 排除清單：避免讀取龐大的底層函式庫，防止超出 Gemini 100 萬 Token 限制
-    exclude_dirs = config.get("exclude_dirs", ['drivers', 'rte', 'cmsis', 'build', 'node_modules', 'lib'])
-    
-    total_chars = 0
-    max_chars = config.get("max_chars", 300000)  # 安全保護機制：限制最多讀取多少字元，防止方案超用
 
-    # 遞迴尋找符合的檔案
+    exclude_dirs = set(config.get("exclude_dirs", ['drivers', 'rte', 'cmsis', 'build', 'node_modules', 'lib']))
+    exclude_dirs.update({'code2course', 'code2course-'})
+
+    total_chars = 0
+    max_chars = config.get("max_chars", 300000)
+
     if os.path.isdir(target_path):
         for ext in supported_exts:
             for filepath in target_path.rglob(f"*{ext}"):
                 file_str = str(filepath)
-                
-                if any(f"/{ex_dir}/" in file_str.lower() or f"\\{ex_dir}\\" in file_str.lower() for ex_dir in exclude_dirs):
+                if _is_excluded_path(file_str, exclude_dirs):
                     continue
-                    
+                try:
+                    rel_parts = filepath.relative_to(target_path).parts
+                except Exception:
+                    rel_parts = ()
+                if any(part.lower() in {'code2course', 'code2course-'} for part in rel_parts):
+                    continue
+
                 if total_chars > max_chars:
                     print(f"\n⚠️ 目錄規模龐大，讀取已達到 Token 安全邊界 ({max_chars} 字元)。已自動略過剩餘的細節檔案。\n")
                     return contents
 
                 try:
-                    # 加入 errors='ignore' 自動略過亂碼與舊編碼
                     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                         content = f.read()
                         if len(content) > 50000:
@@ -74,7 +129,115 @@ def read_source_files(target_dir, config):
                     pass
     return contents
 
-def run_stage1(target_dir, config, temp_dir):
+
+def _summarize_folder_with_gemini(model, folder_path, file_snippets):
+    """對單一資料夾做 Gemini 摘要，作為大型專案的第一層理解。"""
+    if not model:
+        return None
+    try:
+        prompt = f"""請你扮演資深工程講師，為下面的專案資料夾做重點摘要。請只輸出中文摘要，不要寫程式碼。請包含：
+1. 這個資料夾的角色與主要功能
+2. 重要檔案與關鍵概念
+3. 它對整體專案的貢獻
+
+[資料夾] {folder_path.name}
+[檔案內容片段]
+{file_snippets}
+"""
+        response = model.generate_content(prompt)
+        return getattr(response, 'text', '').strip() or None
+    except Exception as exc:
+        print(f"   ⚠️ 資料夾摘要失敗 ({folder_path.name}): {exc}")
+        return None
+
+
+def build_folder_priority_context(target_dir, config, model=None):
+    """對超大專案建立「先按資料夾分析」的摘要內容，供後續 Gemini 分層分析。"""
+    target_path = Path(target_dir)
+    if not target_path.exists() or not target_path.is_dir():
+        return None
+
+    exclude_dirs = set(config.get("exclude_dirs", ['drivers', 'rte', 'cmsis', 'build', 'node_modules', 'lib']))
+    exclude_dirs.update({'code2course', 'code2course-', 'outputs'})
+    supported_exts = config.get("supported_exts", ['.md', '.c', '.py', '.cpp', '.h'])
+
+    folder_summaries = []
+    for child in sorted(target_path.iterdir()):
+        if not child.is_dir():
+            continue
+        if child.name.startswith('.'):
+            continue
+        if child.name.lower() in exclude_dirs:
+            continue
+        folder_items = []
+        for ext in supported_exts:
+            for filepath in child.rglob(f"*{ext}"):
+                if not filepath.is_file():
+                    continue
+                file_str = str(filepath)
+                if _is_excluded_path(file_str, exclude_dirs):
+                    continue
+                folder_items.append(filepath)
+                if len(folder_items) >= 8:
+                    break
+            if len(folder_items) >= 8:
+                break
+
+        if not folder_items:
+            continue
+
+        summary_lines = []
+        for filepath in folder_items:
+            try:
+                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                    snippet = f.read(400).replace('\n', ' ').strip()
+            except Exception:
+                snippet = ''
+            summary_lines.append(f"- {filepath.name}: {snippet[:240]}")
+
+        heuristic_summary = "\n".join(summary_lines)
+        gemini_summary = None
+        if model is not None:
+            gemini_summary = _summarize_folder_with_gemini(model, child, heuristic_summary)
+
+        folder_summaries.append({
+            'folder': child.name,
+            'summary': gemini_summary or heuristic_summary,
+            'summary_mode': 'gemini' if gemini_summary else 'heuristic'
+        })
+
+    return {
+        'mode': 'folder_priority',
+        'project_root': str(target_path),
+        'folder_summaries': folder_summaries,
+    }
+
+
+def prepare_project_context(target_dir, config, model=None):
+    """依據專案規模選擇完整內容或分層資料夾摘要。"""
+    size_info = estimate_project_size(target_dir, config)
+    if size_info['too_large']:
+        folder_context = build_folder_priority_context(target_dir, config, model=model)
+        if folder_context and folder_context['folder_summaries']:
+            return {
+                'mode': 'folder_priority',
+                'size_info': size_info,
+                'folder_context': folder_context,
+            }
+
+    source_texts = read_source_files(target_dir, config)
+    merged_text = ""
+    for filepath, content in source_texts.items():
+        file_name = os.path.basename(filepath)
+        merged_text += f"\n\n--- 檔案：{file_name} ---\n{content}\n"
+    return {
+        'mode': 'full',
+        'size_info': size_info,
+        'source_texts': source_texts,
+        'merged_text': merged_text,
+    }
+
+def run_stage1(target_dir, config, temp_dir, model=None):
     """
     第一階段：單純掃描專案並產生 Prompt (不呼叫 Gemini)
     功能：
@@ -83,17 +246,25 @@ def run_stage1(target_dir, config, temp_dir):
     3. 將生成的最終 Prompt 寫入到暫存區
     """
     print(f"-> [階段 1] 開始掃描資料夾: {target_dir}")
-    source_texts = read_source_files(target_dir, config)
-    
-    if not source_texts:
-        print("未找到任何支援的程式碼或文件。")
-        return None
+    project_context = prepare_project_context(target_dir, config, model=model)
+    size_info = project_context.get('size_info', {})
+    if size_info.get('too_large'):
+        print(f"-> [階段 1] 偵測到大型專案 (約 {size_info.get('estimated_chars', 0)} 字元)，改採資料夾優先摘要模式。")
 
-    print("開始組合檔案內容...")
-    merged_text = ""
-    for filepath, content in source_texts.items():
-        file_name = os.path.basename(filepath)
-        merged_text += f"\n\n--- 檔案：{file_name} ---\n{content}\n"
+    if project_context.get('mode') == 'full':
+        source_texts = project_context.get('source_texts', {})
+        if not source_texts:
+            print("未找到任何支援的程式碼或文件。")
+            return None
+        merged_text = project_context.get('merged_text', '')
+    else:
+        folder_context = project_context.get('folder_context', {})
+        if not folder_context.get('folder_summaries'):
+            print("未找到任何支援的程式碼或文件。")
+            return None
+        merged_text = ""
+        for item in folder_context['folder_summaries']:
+            merged_text += f"\n\n### 資料夾：{item['folder']}\n{item['summary']}\n"
 
     project_structure = _summarize_project_structure(target_dir, config)
     prompt_template_path = os.path.join(config.get("root_dir", "."), "code2course_prompt.txt")
@@ -123,6 +294,8 @@ def run_stage1(target_dir, config, temp_dir):
 專案分析範圍：{target_dir}
 專案結構摘要：
 {project_structure}
+
+如果這是一個大型專案，請先以資料夾為單位理解關鍵功能，並在輸出中強調各資料夾的角色與彼此之間的互動。
 
 輸出的格式必須是純 JSON 陣列 (Array) 結構，不需要 markdown code block，直接輸出 JSON 字串即可：
 [
@@ -175,6 +348,15 @@ def run_stage1(target_dir, config, temp_dir):
             prompt_path = os.path.join(temp_dir, "gemini_prompt_record.txt")
             with open(prompt_path, "w", encoding="utf-8") as f:
                 f.write(prompt)
+
+            meta_path = os.path.join(temp_dir, "scan_mode.json")
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "mode": project_context.get('mode', 'full'),
+                    "size_info": project_context.get('size_info', {}),
+                    "project_root": target_dir,
+                }, f, ensure_ascii=False, indent=2)
+
             print(f"-> [階段 1] 已掃描完成！並將發送給 API 的 Prompt 封裝備份至: {prompt_path}")
         except Exception as e:
             print(f"無法寫入 Prompt：{e}")

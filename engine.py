@@ -34,7 +34,7 @@ class Code2Course:
 
     def stage1_scan_project(self, temp_dir):
         """第一階段：單純掃描專案並產生 Prompt"""
-        return run_stage1(self.target_dir, self.config, temp_dir)
+        return run_stage1(self.target_dir, self.config, temp_dir, model=self.model)
 
     def stage2_gemini_and_ppt(self, prompt_text, final_dir, temp_dir, project_name):
         """第二階段：呼叫 Gemini 產出 JSON 分鏡圖"""
