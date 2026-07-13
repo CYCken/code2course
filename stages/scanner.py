@@ -1,6 +1,39 @@
 import os
 from pathlib import Path
 
+
+def _summarize_project_structure(target_dir, config):
+    """建立專案目錄結構摘要，讓 Prompt 更接近整個專案分析。"""
+    if not target_dir:
+        return "(無有效目標目錄)"
+
+    target_path = Path(target_dir)
+    if not target_path.exists() or not target_path.is_dir():
+        return "(目錄不存在)"
+
+    exclude_dirs = set(config.get("exclude_dirs", ['drivers', 'rte', 'cmsis', 'build', 'node_modules', 'lib']))
+    summary_lines = []
+
+    try:
+        for root, dirs, files in os.walk(target_path):
+            dirs[:] = sorted([d for d in dirs if not any(f"/{d}/" in f"/{os.path.join(root, d)}/" or f"\\{d}\\" in f"{os.path.join(root, d)}\\" for _ in [0])])
+            dirs[:] = sorted([d for d in dirs if d not in exclude_dirs and not d.startswith('.')])
+            rel_root = os.path.relpath(root, target_path)
+            if rel_root == '.':
+                current_prefix = '.'
+            else:
+                current_prefix = rel_root
+            if files:
+                visible_files = sorted([f for f in files if not f.startswith('.')])[:20]
+                summary_lines.append(f"{current_prefix}/: {', '.join(visible_files)}")
+                if len(files) > 20:
+                    summary_lines.append(f"... 以及 {len(files) - 20} 個其他檔案")
+    except Exception:
+        return "(結構摘要建立失敗)"
+
+    return "\n".join(summary_lines[:40]) or "(無可顯示的檔案結構)"
+
+
 def read_source_files(target_dir, config):
     """讀取目標資料夾內的特定副檔名檔案"""
     if not target_dir:
@@ -61,7 +94,8 @@ def run_stage1(target_dir, config, temp_dir):
     for filepath, content in source_texts.items():
         file_name = os.path.basename(filepath)
         merged_text += f"\n\n--- 檔案：{file_name} ---\n{content}\n"
-        
+
+    project_structure = _summarize_project_structure(target_dir, config)
     prompt_template_path = os.path.join(config.get("root_dir", "."), "code2course_prompt.txt")
     
     # 固定輸出結構描述，減少主回傳負擔
@@ -83,6 +117,12 @@ def run_stage1(target_dir, config, temp_dir):
 
 你的輸出必須包含以下結構化資訊：
 {output_structure}
+
+請把這次分析視為「完整專案導向的教學設計」，而不是僅針對單一檔案或局部程式碼片段。請先理解專案的整體目的、架構與功能流程，再整理出一個適合微課教學的脈絡。
+
+專案分析範圍：{target_dir}
+專案結構摘要：
+{project_structure}
 
 輸出的格式必須是純 JSON 陣列 (Array) 結構，不需要 markdown code block，直接輸出 JSON 字串即可：
 [

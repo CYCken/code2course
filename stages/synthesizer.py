@@ -1,6 +1,12 @@
 import os
 import subprocess
 from PIL import Image, ImageDraw, ImageFont
+import edge_tts
+import asyncio
+
+async def amain(text, voice, output_path):
+    communicate = edge_tts.Communicate(text, voice)
+    await communicate.save(output_path)
 
 def run_stage5(structured_content, output_video_path, temp_dir, style=None):
     """
@@ -43,7 +49,7 @@ def run_stage5(structured_content, output_video_path, temp_dir, style=None):
         # 1. 生成語音
         if not os.path.exists(audio_path):
             print(f"\r正在生成語音腳本: 第 {slide_num} / {total_slides} 頁 (edge-tts)...", end="", flush=True)
-            subprocess.run(["edge-tts", "--voice", "zh-TW-HsiaoChenNeural", "--text", text_script, "--write-media", audio_path], check=True, capture_output=True)
+            asyncio.run(amain(text_script, "zh-TW-HsiaoChenNeural", audio_path))
         
     if total_slides > 0:
         print() # 結束進度條換行
@@ -53,7 +59,8 @@ def run_stage5(structured_content, output_video_path, temp_dir, style=None):
         pexels_img_path = os.path.join(temp_dir, f"slide_{slide_num}_pexels_bg.jpg")
         if os.path.exists(pexels_img_path):
             try:
-                img = Image.open(pexels_img_path).resize((1920, 1080))
+                img = Ima
+                ge.open(pexels_img_path).resize((1920, 1080))
             except Exception:
                 img = Image.new('RGB', (1920, 1080), color=bg_color_rgb)
         else:
@@ -73,6 +80,9 @@ def run_stage5(structured_content, output_video_path, temp_dir, style=None):
         system_fonts = [
             "/System/Library/Fonts/PingFang.ttc",
             "/Library/Fonts/Arial Unicode.ttf",
+            "C:\\Windows\\Fonts\\msyh.ttc",
+            "C:\\Windows\\Fonts\\msyhbd.ttc",
+            "C:\\Windows\\Fonts\\simhei.ttf",
             "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc"
         ]

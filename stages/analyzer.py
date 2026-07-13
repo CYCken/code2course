@@ -4,6 +4,7 @@ import re
 import sys
 import time
 import threading
+from google.api_core import exceptions as api_exceptions
 
 def generate_marp_markdown(structured_content, output_path):
     """產生 Marp 格式的 Markdown 檔案"""
@@ -177,6 +178,17 @@ def run_stage2(model, prompt_text, final_dir, temp_dir, config, project_name):
     try:
         safety_settings = {cat: HarmBlockThreshold.BLOCK_NONE for cat in [HarmCategory.HARM_CATEGORY_HARASSMENT, HarmCategory.HARM_CATEGORY_HATE_SPEECH, HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT]}
         response = model.generate_content(final_prompt, generation_config={"response_mime_type": "application/json"}, safety_settings=safety_settings)
+    except api_exceptions.ResourceExhausted as e:
+        stop_spinner = True; spinner_thread.join()
+        print("\n❌ Gemini API 配額已用盡，請檢查您的計畫與帳號設定。")
+        print("   - 可能需要升級方案或等待配額重置")
+        print("   - 或改用較小模型，例如 gemini-1.5-mini")
+        print(f"   - 詳細原因：{e}")
+        return None
+    except Exception as e:
+        stop_spinner = True; spinner_thread.join()
+        print(f"\n❌ Gemini 服務呼叫失敗：{e}")
+        return None
     finally:
         stop_spinner = True; spinner_thread.join()
 

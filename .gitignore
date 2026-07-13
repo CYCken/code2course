@@ -30,3 +30,6 @@ outputs/
 # 建議您可以在專案留一份 code2course_config.example.json 給別人參考
 code2course_config.json
 code2course_prompt.txt
+dist/
+build/
+.pyinstaller_venv
