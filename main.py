@@ -36,7 +36,7 @@ else:
 
 # 匯入模組化後的核心產生器
 from engine import Code2Course
-from utils.project_selection import get_selectable_project_folders, resolve_analysis_target_path
+from utils.project_selection import get_selectable_project_folders, resolve_analysis_target_path, select_analysis_path
 
 # 載入環境變數 (例如 Gemini API Key)
 load_dotenv()
@@ -465,23 +465,24 @@ def main():
         # --- 階段 1：掃描 ---
         if current_mode == 1 or (current_mode == 0 and not is_chained_execution):
             if not target_folder:
-                folders = _get_target_folders(root_dir, current_app_dir=app_dir)
-                if not folders:
-                    print(f"在 {root_dir} 下找不到任何可分析的資料夾。")
+                selected_path = select_analysis_path(
+                    root_dir,
+                    current_app_dir=app_dir,
+                    prompt_title="📂 請選擇要分析的專案資料夾（選擇 all 會分析整個專案根目錄）：",
+                    questionary_module=questionary,
+                )
+                if not selected_path:
                     return
-                target_folder = questionary.select(
-                    "📂 請選擇要分析的專案資料夾（選擇 all 會分析整個專案根目錄）：",
-                    choices=folders,
-                ).ask()
+                target_folder = os.path.basename(selected_path) or "all"
+                full_target_path = selected_path
+            else:
+                full_target_path = resolve_analysis_target_path(root_dir, target_folder, current_app_dir=app_dir)
 
-            if not target_folder: return
-
-            full_target_path = resolve_analysis_target_path(root_dir, target_folder, current_app_dir=app_dir)
             if not full_target_path:
                 print("❌ 無法解析分析目標。")
                 return
 
-            if target_folder == "all":
+            if target_folder == "all" or os.path.abspath(full_target_path) == os.path.abspath(root_dir):
                 print(f"-> 已選擇分析整個專案根目錄: {full_target_path}")
             else:
                 print(f"-> 已選擇分析資料夾: {full_target_path}")
